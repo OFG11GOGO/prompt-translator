@@ -1,1 +1,320 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Prompt Translator & Builder</title>
+  <link rel="manifest" href="manifest.json">
+  <meta name="mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="theme-color" content="#121212">
+  <style>
+    :root {
+      --bg: #121212;
+      --card: #1e1e1e;
+      --accent: #007aff;
+      --green: #28a745;
+      --danger: #dc3545;
+      --text: #e0e0e0;
+      --border: #333;
+    }
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+      background-color: var(--bg);
+      color: var(--text);
+      margin: 0;
+      padding: 16px;
+      box-sizing: border-box;
+    }
+    h2 { font-size: 1.1rem; margin-top: 0; color: #fff; }
+    .card {
+      background: var(--card);
+      border-radius: 12px;
+      padding: 16px;
+      margin-bottom: 16px;
+      border: 1px solid var(--border);
+    }
+    label { font-size: 0.85rem; color: #aaa; display: block; margin-bottom: 6px; }
+    textarea, input[type="text"] {
+      width: 100%;
+      background: #2a2a2a;
+      border: 1px solid var(--border);
+      color: #fff;
+      border-radius: 8px;
+      padding: 10px;
+      box-sizing: border-box;
+      font-size: 0.95rem;
+    }
+    textarea { height: 100px; resize: vertical; }
+    input[type="text"] { height: 40px; margin-bottom: 8px; }
+    .btn-group {
+      display: flex;
+      gap: 8px;
+      margin-top: 8px;
+      flex-wrap: wrap;
+    }
+    button {
+      background: var(--accent);
+      color: white;
+      border: none;
+      padding: 10px 14px;
+      border-radius: 8px;
+      font-weight: bold;
+      cursor: pointer;
+      font-size: 0.85rem;
+      flex: 1;
+      min-width: 100px;
+    }
+    button:active { opacity: 0.8; }
+    .btn-secondary { background: #444; }
+    .btn-success { background: var(--green); }
+    .btn-danger { background: var(--danger); padding: 4px 8px; font-size: 0.75rem; min-width: auto; flex: 0; }
+    
+    /* テンプレート関連スタイル */
+    .template-list {
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+      margin-top: 10px;
+      max-height: 200px;
+      overflow-y: auto;
+    }
+    .template-item {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      background: #2a2a2a;
+      padding: 8px 12px;
+      border-radius: 8px;
+      border: 1px solid #333;
+    }
+    .template-info {
+      cursor: pointer;
+      flex: 1;
+      margin-right: 8px;
+    }
+    .template-title { font-size: 0.85rem; font-weight: bold; color: #fff; }
+    .template-content { font-size: 0.75rem; color: #888; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 200px; }
+    .output-box {
+      background: #000;
+      border: 1px solid var(--accent);
+      color: #00ffcc;
+      font-family: monospace;
+      word-break: break-all;
+    }
+    /* 広告用スタイル */
+    .ad-container {
+      text-align: center;
+      margin-top: 16px;
+      margin-bottom: 16px;
+    }
+  </style>
+</head>
+<body>
+
+  <!-- 入力エリア -->
+  <div class="card">
+    <h2>1. テキスト入力 & 組み立て</h2>
+    <label>テンプレートを押すとここに追加されます（手入力もOK）</label>
+    <textarea id="inputText" placeholder="テンプレートを選択するか、自由に入力..."></textarea>
+    
+    <div class="btn-group">
+      <button onclick="translateText('ja|en')">日本語 ➔ 英語</button>
+      <button onclick="translateText('en|ja')" class="btn-secondary">英語 ➔ 日本語</button>
+      <button onclick="clearAll()" style="flex: 0 0 60px; min-width: auto; background: #666;">消去</button>
+    </div>
+  </div>
+
+  <!-- テンプレート保存＆呼び出しエリア -->
+  <div class="card">
+    <h2>Myテンプレート（Google Keep等のストック）</h2>
+    <label>よく使うフレーズやプロンプトを登録（タップで入力欄に挿入）</label>
+    
+    <!-- 新規登録枠 -->
+    <input type="text" id="tplTitle" placeholder="タイトル（例：女の子基本セット）">
+    <textarea id="tplContent" style="height: 60px;" placeholder="内容（例：黒髪ロング、制服、笑顔、光の粒子）"></textarea>
+    <button onclick="saveTemplate()" style="width: 100%; margin-top: 6px; background: #555;">＋ テンプレートとして保存</button>
+
+    <!-- 保存されたリスト -->
+    <div class="template-list" id="templateList"></div>
+  </div>
+
+  <!-- 出力エリア -->
+  <div class="card">
+    <h2>2. 変換結果</h2>
+    <textarea id="outputText" class="output-box" placeholder="変換結果がここに表示されます"></textarea>
+    <div class="btn-group">
+      <button class="btn-success" onclick="copyToClipboard()">コピーする</button>
+    </div>
+  </div>
+
+  <!-- 忍者AdMax広告エリア -->
+  <div class="ad-container">
+    <!-- admax -->
+    <script src="https://adm.shinobi.jp/s/6d8e2710b7773a784b1ee654b3fa63d9"></script>
+    <!-- admax -->
+  </div>
+
+  <script>
+    // 起動時に保存されたテンプレートを読み込む
+    document.addEventListener("DOMContentLoaded", renderTemplates);
+
+    // 単発翻訳処理
+    async function fetchTranslation(text, pair) {
+      const url = `https://api.mymemory.translated.net/get?q=${encodeURIComponent(text)}&langpair=${pair}`;
+      const res = await fetch(url);
+      const data = await res.json();
+      return data.responseData ? data.responseData.translatedText : text;
+    }
+
+    // 翻訳メイン関数
+    async function translateText(pair) {
+      const input = document.getElementById('inputText').value.trim();
+      if (!input) {
+        alert("テキストを入力してください！");
+        return;
+      }
+
+      const outputArea = document.getElementById('outputText');
+      outputArea.value = "翻訳中...";
+
+      try {
+        let sourceText = input;
+        if (pair === 'ja|en') {
+          sourceText = sourceText.replace(/、/g, ', ').replace(/。/g, ', ');
+        }
+
+        let chunks = [];
+        let tempText = sourceText;
+
+        while (tempText.length > 0) {
+          if (tempText.length <= 300) {
+            chunks.push(tempText);
+            break;
+          }
+          let splitIdx = tempText.lastIndexOf(',', 300);
+          if (splitIdx === -1) splitIdx = tempText.lastIndexOf('\n', 300);
+          if (splitIdx === -1) splitIdx = 300;
+
+          chunks.push(tempText.substring(0, splitIdx + 1));
+          tempText = tempText.substring(splitIdx + 1);
+        }
+
+        let translatedChunks = [];
+        for (let chunk of chunks) {
+          if (chunk.trim().length > 0) {
+            let resText = await fetchTranslation(chunk.trim(), pair);
+            translatedChunks.push(resText);
+          }
+        }
+
+        let fullResult = translatedChunks.join(' ');
+
+        if (pair === 'ja|en') {
+          fullResult = fullResult
+            .replace(/\./g, ',')
+            .split(',')
+            .map(item => item.trim())
+            .filter(item => item.length > 0)
+            .join(', ');
+        } else {
+          fullResult = fullResult
+            .replace(/, /g, '、')
+            .replace(/,/g, '、');
+        }
+
+        outputArea.value = fullResult;
+      } catch (err) {
+        alert("翻訳エラーが発生しました。");
+        outputArea.value = "";
+      }
+    }
+
+    // --- テンプレート機能 ---
+
+    // テンプレート追加（入力欄の末尾に繋げる）
+    function appendTemplate(content) {
+      const inputEl = document.getElementById('inputText');
+      if (inputEl.value.trim().length > 0) {
+        // すでに文字があればカンマで繋ぐ
+        if (!inputEl.value.trim().endsWith('、') && !inputEl.value.trim().endsWith(',')) {
+          inputEl.value += '、';
+        }
+      }
+      inputEl.value += content;
+    }
+
+    // テンプレート保存
+    function saveTemplate() {
+      const title = document.getElementById('tplTitle').value.trim();
+      const content = document.getElementById('tplContent').value.trim();
+
+      if (!title || !content) {
+        alert("タイトルと内容の両方を入力してください");
+        return;
+      }
+
+      let templates = JSON.parse(localStorage.getItem('grok_templates') || '[]');
+      templates.push({ id: Date.now(), title: title, content: content });
+      localStorage.setItem('grok_templates', JSON.stringify(templates));
+
+      document.getElementById('tplTitle').value = "";
+      document.getElementById('tplContent').value = "";
+
+      renderTemplates();
+    }
+
+    // テンプレート削除
+    function deleteTemplate(id) {
+      let templates = JSON.parse(localStorage.getItem('grok_templates') || '[]');
+      templates = templates.filter(t => t.id !== id);
+      localStorage.setItem('grok_templates', JSON.stringify(templates));
+      renderTemplates();
+    }
+
+    // テンプレート一覧描画
+    function renderTemplates() {
+      const listEl = document.getElementById('templateList');
+      let templates = JSON.parse(localStorage.getItem('grok_templates') || '[]');
+
+      if (templates.length === 0) {
+        listEl.innerHTML = '<div style="font-size:0.8rem; color:#666;">保存されたテンプレートはありません</div>';
+        return;
+      }
+
+      listEl.innerHTML = "";
+      templates.forEach(t => {
+        const item = document.createElement('div');
+        item.className = 'template-item';
+        item.innerHTML = `
+          <div class="template-info" onclick="appendTemplate('${t.content.replace(/'/g, "\\'")}')">
+            <div class="template-title">${t.title}</div>
+            <div class="template-content">${t.content}</div>
+          </div>
+          <button class="btn-danger" onclick="deleteTemplate(${t.id})">削除</button>
+        `;
+        listEl.appendChild(item);
+      });
+    }
+
+    function clearAll() {
+      document.getElementById('inputText').value = "";
+      document.getElementById('outputText').value = "";
+    }
+
+    function copyToClipboard() {
+      const outputArea = document.getElementById('outputText');
+      if (!outputArea.value || outputArea.value === "翻訳中...") return;
+
+      navigator.clipboard.writeText(outputArea.value).then(() => {
+        alert("コピーしました！");
+      }).catch(() => {
+        outputArea.select();
+        document.execCommand('copy');
+        alert("コピーしました！");
+      });
+    }
+  </script>
+</body>
+</html>
 
